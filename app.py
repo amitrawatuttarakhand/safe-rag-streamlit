@@ -116,13 +116,43 @@ def chunk_text(text: str, chunk_size: int = 900, overlap: int = 150) -> list[str
     return chunks
 
 
+def process_and_add_pdf(pdf_path: Path):
+    """Auxiliary function to chunk, embed, and store a PDF in ChromaDB."""
+    collection = get_collection()
+    reader = PdfReader(str(pdf_path))
+
+    all_chunks = []
+    all_metadata = []
+    all_ids = []
+
+    for page_number, page in enumerate(reader.pages, start=1):
+        page_text = page.extract_text() or ""
+
+        for index, chunk in enumerate(chunk_text(page_text)):
+            all_chunks.append(chunk)
+            all_metadata.append({
+                "document": pdf_path.name,
+                "page": page_number,
+                "chunk_id": f"{pdf_path.name}-p{page_number}-c{index}",
+            })
+            all_ids.append(str(uuid.uuid4()))
+
+    if all_chunks:
+        embeddings = embed_texts(all_chunks)
+        collection.add(
+            ids=all_ids,
+            documents=all_chunks,
+            metadatas=all_metadata,
+            embeddings=embeddings,
+        )
+
+
 def ingest_documents():
     """
-    Demo mode: Will ingest documents once on every new deployment/restart.
+    Demo mode: Will ingest documents existing in the folder once on restart.
     """
     collection = get_collection()
 
-    # Do not ingest again if data already exists
     if collection.count() > 0:
         return
 
@@ -133,37 +163,8 @@ def ingest_documents():
         st.warning("No PDF found in the data/documents folder.")
         return
 
-    all_chunks = []
-    all_metadata = []
-    all_ids = []
-
     for pdf_path in pdf_files:
-        reader = PdfReader(str(pdf_path))
-
-        for page_number, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text() or ""
-
-            for index, chunk in enumerate(chunk_text(page_text)):
-                all_chunks.append(chunk)
-                all_metadata.append({
-                    "document": pdf_path.name,
-                    "page": page_number,
-                    "chunk_id": f"{pdf_path.name}-p{page_number}-c{index}",
-                })
-                all_ids.append(str(uuid.uuid4()))
-
-    if not all_chunks:
-        st.warning("No readable text found in the PDFs.")
-        return
-
-    embeddings = embed_texts(all_chunks)
-
-    collection.add(
-        ids=all_ids,
-        documents=all_chunks,
-        metadatas=all_metadata,
-        embeddings=embeddings,
-    )
+        process_and_add_pdf(pdf_path)
 
 
 def retrieve_chunks(question: str, role: str, top_k: int = 5) -> list[dict]:
@@ -288,6 +289,18 @@ with st.sidebar:
         "In production, the role should be fetched from login/JWT/SSO, not a dropdown."
     )
 
+    st.subheader("📤 Upload Documents")
+    uploaded_files = st.file_uploader("Upload PDF Files", type=["pdf"], accept_multiple_files=True)
+    if uploaded_files:
+        DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        for uploaded_file in uploaded_files:
+            file_path = DOCUMENTS_DIR / uploaded_file.name
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            # Ingest uploaded file immediately
+            process_and_add_pdf(file_path)
+        st.success("Uploaded files saved and processed successfully!")
+
     st.subheader("Your allowed documents")
     for doc in allowed_documents(role):
         st.write(f"✅ {doc}")
@@ -297,7 +310,7 @@ with st.sidebar:
         st.rerun()
 
 
-# Ingest documents
+# Ingest documents from disk (if available)
 with st.spinner("Preparing documents..."):
     ingest_documents()
 
