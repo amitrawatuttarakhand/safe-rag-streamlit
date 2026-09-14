@@ -17,7 +17,7 @@ DOCUMENTS_DIR = Path("data/documents")
 CHROMA_PATH = "data/chroma_db"
 COLLECTION_NAME = "company_documents"
 
-CHAT_MODEL = "google/gemini-2.0-flash-001"
+CHAT_MODEL = "openai/gpt-4o-mini"
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
