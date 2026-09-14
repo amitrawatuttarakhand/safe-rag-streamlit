@@ -35,9 +35,10 @@ DOCUMENT_ACCESS = {
 # Input guardrail
 # -------------------------
 PROMPT_INJECTION_PATTERNS = [
+    
+    r"(reveal|show) (the )?(system|developer) prompt",  # 'show system prompt' को भी पकड़ेगा
     r"ignore (all |previous |prior )?instructions",
     r"ignore (all |previous |prior )?rules",
-    r"reveal (the )?(system|developer) prompt",
     r"show (me )?(your )?hidden instructions",
     r"you are now",
     r"act as",
